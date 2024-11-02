@@ -88,7 +88,7 @@ sudo systemctl enable supervisord
 sudo systemctl start supervisord
 
 # Disable root login via SSH
-#sudo sed -i 's/^#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+sudo sed -i 's/^#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
 
 # Restart SSH service to disable root login
 sudo systemctl restart sshd
