@@ -156,9 +156,9 @@ http {
         include       /etc/nginx/mime.types;
         default_type  application/octet-stream;
 
-        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
-                      '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent" "$http_x_forwarded_for"';
+        log_format  main  '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                      '\$status \$body_bytes_sent "\$http_referer" '
+                      '\"$http_user_agent" "\$http_x_forwarded_for"';
 
         #Disable IFRAME
         add_header X-Frame-Options SAMEORIGIN;
@@ -215,7 +215,7 @@ server {
 	auth_basic_user_file /etc/nginx/.htpasswd;
 		
     location / {
-        try_files $uri $uri/ /index.php?$query_string;
+        try_files \$uri \$uri/ /index.php?\$query_string;
     }
 	
     location ~ \.php$ {
@@ -244,6 +244,10 @@ sudo chown -R nginx:nginx /var/lib/php/session/
 sudo chown -R nginx:nginx /etc/nginx/.htpasswd
 sudo chcon -R -t httpd_sys_rw_content_t /etc/nginx/.htpasswd
 sudo semanage port -a -t http_port_t  -p tcp 9119
+
+# Set SELinux permissions (if SELinux is enabled)
+sudo setsebool -P httpd_can_network_connect 1
+sudo chcon -t httpd_sys_rw_content_t /home/html -R
 
 # Test Nginx configuration and restart Nginx
 sudo nginx -t
