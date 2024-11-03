@@ -67,8 +67,12 @@ sudo sed -i 's|^listen = /run/php-fpm/www.sock|listen = 127.0.0.1:9000|' /etc/ph
 sudo systemctl enable --now php-fpm
 sudo systemctl status php-fpm
 
+# Update the upload_max_filesize value
+sudo sed -i "s/^upload_max_filesize = .*/upload_max_filesize = 50M/" "/etc/php.ini"
 
-
+# Also, update post_max_size if needed to allow larger uploads
+sudo sed -i "s/^post_max_size = .*/post_max_size = 50M/" "/etc/php.ini"
+sudo systemctl restart php-fpm
 
 
 # Set SELinux permissions (if SELinux is enabled)
