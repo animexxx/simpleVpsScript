@@ -14,4 +14,4 @@ A comprehensive setup script for deploying essential services on a fresh VPS, in
 3. Run chmod +x on the script to make it executable.
 4. IMPORTANT: Change ROOT_PASS at the top of the file to set a secure root password for MariaDB and phpMyAdmin.
 5. Run the script as root.
-6. Access phpMyAdmin at http://<your-ip>:9119 using root and the ROOT_PASS as credentials.
+6. Access phpMyAdmin at http://your-server-ip:9119 using root and the ROOT_PASS as credentials.
