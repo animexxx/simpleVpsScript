@@ -69,9 +69,10 @@ sudo systemctl status php-fpm
 
 # Update the upload_max_filesize value
 sudo sed -i "s/^upload_max_filesize = .*/upload_max_filesize = 50M/" "/etc/php.ini"
-
-# Also, update post_max_size if needed to allow larger uploads
 sudo sed -i "s/^post_max_size = .*/post_max_size = 50M/" "/etc/php.ini"
+sudo sed -i "s/^memory_limit = .*/memory_limit = 256M/" "/etc/php.ini"
+sudo sed -i "s/^max_execution_time = .*/max_execution_time = 300/" "/etc/php.ini"
+
 sudo systemctl restart php-fpm
 
 
