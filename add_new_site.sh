@@ -8,7 +8,8 @@ mkdir -p "/home/$domain"
 #add nginx conf
 sudo bash -c "cat > /etc/nginx/conf.d/$domain.conf" <<EOF
 server {
-    listen       9119;
+    listen       80;
+    listen       [::]:80;
     server_name  $domain;
 
     root   /home/$domain;
