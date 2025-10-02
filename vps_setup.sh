@@ -38,6 +38,17 @@ sudo systemctl start nginx
 # Install MySQL (MariaDB)
 sudo dnf install mariadb-server mariadb -y
 
+# Install Memcached and PHP Memcached module
+sudo dnf install memcached php-pecl-memcached -y
+
+# Configure Memcached to only listen on localhost and disable UDP
+sudo sed -i 's/^OPTIONS.*$/OPTIONS="-l 127.0.0.1 -U 0"/' /etc/sysconfig/memcached
+
+# Enable and start Memcached
+sudo systemctl enable memcached
+sudo systemctl start memcached
+
+
 # Enable and start MariaDB
 sudo systemctl enable mariadb
 sudo systemctl start mariadb
