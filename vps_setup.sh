@@ -1,7 +1,7 @@
 #!/bin/bash
 # Set MariaDB root password and secure installation
 
-ROOT_PASS="@abcX!Pro"
+ROOT_PASS="@abc12345"
 
 # Exit immediately if a command exits with a non-zero status
 set -e
@@ -94,6 +94,7 @@ sudo chcon -t httpd_sys_rw_content_t /usr/share/nginx/html -R
 # Firewall configuration (if firewalld is active)
 sudo firewall-cmd --permanent --zone=public --add-service=http
 sudo firewall-cmd --permanent --zone=public --add-service=https
+sudo firewall-cmd --permanent --add-port=2222/tcp
 sudo firewall-cmd --permanent --add-port=9119/tcp
 sudo firewall-cmd --reload
 
@@ -103,8 +104,9 @@ sudo dnf install supervisor -y
 sudo systemctl enable supervisord
 sudo systemctl start supervisord
 
-# Disable root login via SSH
+# Disable root login via SSH and change SSH port to 2222
 sudo sed -i 's/^#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+sudo sed -i 's/^#Port 22/Port 2222/' /etc/ssh/sshd_config
 
 # Restart SSH service to disable root login
 sudo systemctl restart sshd
@@ -116,7 +118,7 @@ sudo dnf install fail2ban -y
 sudo bash -c 'cat > /etc/fail2ban/jail.local' <<EOF
 [sshd]
 enabled = true
-port    = 22
+port    = 2222
 logpath = %(sshd_log)s
 backend = %(sshd_backend)s
 maxretry = 5
@@ -213,6 +215,10 @@ http {
         gzip_buffers 16 8k;
         gzip_http_version 1.1;
         gzip_types text/plain text/css application/json text/javascript application/javascript text/xml application/xml application/xml+rss;
+
+        fastcgi_connect_timeout 300;
+        fastcgi_send_timeout    300;
+        fastcgi_read_timeout    300;
 
         include /etc/nginx/conf.d/*.conf;
 }
