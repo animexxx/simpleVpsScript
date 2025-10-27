@@ -108,6 +108,9 @@ sudo systemctl start supervisord
 sudo sed -i 's/^#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
 sudo sed -i 's/^#Port 22/Port 2222/' /etc/ssh/sshd_config
 
+# Allow SELinux to permit SSH on port 2222
+sudo semanage port -a -t ssh_port_t -p tcp 2222
+
 # Restart SSH service to disable root login
 sudo systemctl restart sshd
 
