@@ -1,7 +1,8 @@
 #!/bin/bash
 # Set MariaDB root password and secure installation
 
-ROOT_PASS="@abcd1234!"
+# Override at runtime without editing this file:  ROOT_PASS='real-pass' ./vps_setup.sh
+ROOT_PASS="${ROOT_PASS:-@abc12345}"
 
 # Exit immediately if a command exits with a non-zero status
 set -e
