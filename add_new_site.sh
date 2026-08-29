@@ -10,7 +10,7 @@ sudo bash -c "cat > /etc/nginx/conf.d/$domain.conf" <<EOF
 server {
     listen       80;
     listen       [::]:80;
-    server_name  $domain;
+    server_name  $domain www.$domain;
 
     root   /home/$domain;
     index  index.php index.html index.htm;

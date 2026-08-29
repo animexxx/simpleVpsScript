@@ -1,7 +1,7 @@
 #!/bin/bash
 # Set MariaDB root password and secure installation
 
-ROOT_PASS="@abc12345"
+ROOT_PASS="@abcd1234!"
 
 # Exit immediately if a command exits with a non-zero status
 set -e
@@ -38,15 +38,18 @@ sudo systemctl start nginx
 # Install MySQL (MariaDB)
 sudo dnf install mariadb-server mariadb -y
 
-# Install Memcached and PHP Memcached module
-sudo dnf install memcached php-pecl-memcached -y
+# Install Redis and PHP Redis module (object cache for WordPress)
+sudo dnf install redis php-redis -y
 
-# Configure Memcached to only listen on localhost and disable UDP
-sudo sed -i 's/^OPTIONS.*$/OPTIONS="-l 127.0.0.1 -U 0"/' /etc/sysconfig/memcached
+# Limit Redis memory so cache growth doesn't starve MariaDB/PHP on small VPS
+# 128mb for 1-2GB RAM, 256mb for >=4GB; allkeys-lru evicts old keys instead of erroring
+REDIS_MAXMEM=128mb
+[ "$(free -m | awk '/^Mem:/{print $2}')" -ge 3500 ] && REDIS_MAXMEM=256mb
+sudo sed -i "s/^# maxmemory <bytes>/maxmemory ${REDIS_MAXMEM}/" /etc/redis/redis.conf
+sudo sed -i 's/^# maxmemory-policy noeviction/maxmemory-policy allkeys-lru/' /etc/redis/redis.conf
 
-# Enable and start Memcached
-sudo systemctl enable memcached
-sudo systemctl start memcached
+# Enable and start Redis (defaults already bind 127.0.0.1 + protected-mode on)
+sudo systemctl enable redis --now
 
 
 # Enable and start MariaDB
@@ -73,6 +76,26 @@ sudo sed -i 's/^group = apache/group = nginx/g' /etc/php-fpm.d/www.conf
 sudo sed -i 's/;listen.owner = nobody/listen.owner = nginx/g' /etc/php-fpm.d/www.conf
 sudo sed -i 's/;listen.group = nobody/listen.group = nginx/g' /etc/php-fpm.d/www.conf
 sudo sed -i 's|^listen = /run/php-fpm/www.sock|listen = 127.0.0.1:9000|' /etc/php-fpm.d/www.conf
+
+# Tune PHP-FPM pool size based on total RAM (~10 child processes per GB, min 10)
+# 1GB -> 10, 2GB -> 20, 4GB -> 40, ... scales up with more RAM
+RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+RAM_GB=$(( (RAM_MB + 512) / 1024 ))
+[ "$RAM_GB" -lt 1 ] && RAM_GB=1
+MAX_CHILDREN=$(( RAM_GB * 10 ))
+START_SERVERS=$(( MAX_CHILDREN / 4 ))
+MIN_SPARE=$(( MAX_CHILDREN / 4 ))
+MAX_SPARE=$(( MAX_CHILDREN / 2 ))
+[ "$START_SERVERS" -lt 2 ] && START_SERVERS=2
+[ "$MIN_SPARE" -lt 1 ] && MIN_SPARE=1
+[ "$MAX_SPARE" -lt 3 ] && MAX_SPARE=3
+
+echo "Detected ${RAM_MB}MB RAM (~${RAM_GB}GB) -> pm.max_children=${MAX_CHILDREN}, start=${START_SERVERS}, min_spare=${MIN_SPARE}, max_spare=${MAX_SPARE}"
+
+sudo sed -i "s/^pm.max_children = .*/pm.max_children = ${MAX_CHILDREN}/" /etc/php-fpm.d/www.conf
+sudo sed -i "s/^pm.start_servers = .*/pm.start_servers = ${START_SERVERS}/" /etc/php-fpm.d/www.conf
+sudo sed -i "s/^pm.min_spare_servers = .*/pm.min_spare_servers = ${MIN_SPARE}/" /etc/php-fpm.d/www.conf
+sudo sed -i "s/^pm.max_spare_servers = .*/pm.max_spare_servers = ${MAX_SPARE}/" /etc/php-fpm.d/www.conf
 
 # Enable and start PHP-FPM
 sudo systemctl enable --now php-fpm
@@ -105,7 +128,7 @@ sudo systemctl enable supervisord
 sudo systemctl start supervisord
 
 # Disable root login via SSH and change SSH port to 2222
-sudo sed -i 's/^#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+#sudo sed -i 's/^#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
 sudo sed -i 's/^#Port 22/Port 2222/' /etc/ssh/sshd_config
 
 # Allow SELinux to permit SSH on port 2222
@@ -273,6 +296,12 @@ sudo semanage port -a -t http_port_t  -p tcp 9119
 # Set SELinux permissions (if SELinux is enabled)
 sudo setsebool -P httpd_can_network_connect 1
 sudo chcon -t httpd_sys_rw_content_t /home/html -R
+
+# Set /home as the default directory for SSH and SFTP
+# Change root's home directory to /home so SFTP clients land in /home by default
+sudo usermod -d /home root
+# Ensure SSH sessions also start in /home
+echo 'cd /home' | sudo tee -a /root/.bashrc > /dev/null
 
 # Test Nginx configuration and restart Nginx
 sudo nginx -t
