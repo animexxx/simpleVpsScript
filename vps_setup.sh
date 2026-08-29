@@ -1,8 +1,20 @@
 #!/bin/bash
 # Set MariaDB root password and secure installation
 
-# Override at runtime without editing this file:  ROOT_PASS='real-pass' ./vps_setup.sh
-ROOT_PASS="${ROOT_PASS:-@abc12345}"
+# MariaDB (MySQL) root password.
+# Set it non-interactively:  ROOT_PASS='real-pass' ./vps_setup.sh
+# Otherwise you will be prompted for it below.
+if [ -z "${ROOT_PASS:-}" ]; then
+    while :; do
+        read -rsp "Please enter your root password (MySQL root password to set): " ROOT_PASS; echo
+        read -rsp "Please re-enter to confirm: " ROOT_PASS_CONFIRM; echo
+        if [ -n "$ROOT_PASS" ] && [ "$ROOT_PASS" = "$ROOT_PASS_CONFIRM" ]; then
+            break
+        fi
+        echo "Password is empty or does not match, please try again."
+    done
+    unset ROOT_PASS_CONFIRM
+fi
 
 # Exit immediately if a command exits with a non-zero status
 set -e
