@@ -1,0 +1,152 @@
+#!/bin/bash
+# DB tier only: MariaDB, reachable exclusively over Vultr's private VPC network.
+# Run this first, then setup_web.sh on the other VPS pointing at this box's private IP.
+
+# --- This server's own private VPC IP (what MariaDB will bind/listen on) ---
+if [ -z "${DB_PRIVATE_IP:-}" ]; then
+    read -rp "Enter THIS server's private VPC IP (e.g. 10.1.0.2): " DB_PRIVATE_IP
+fi
+if [ -z "$DB_PRIVATE_IP" ]; then
+    echo "DB_PRIVATE_IP is required. Aborting." >&2
+    exit 1
+fi
+
+# --- The web server's private VPC IP (only source firewalld/MariaDB will trust) ---
+if [ -z "${WEB_PRIVATE_IP:-}" ]; then
+    read -rp "Enter the web server's private VPC IP that is allowed to connect (e.g. 10.1.0.3): " WEB_PRIVATE_IP
+fi
+if [ -z "$WEB_PRIVATE_IP" ]; then
+    echo "WEB_PRIVATE_IP is required. Aborting." >&2
+    exit 1
+fi
+
+# --- MariaDB root password ---
+if [ -z "${ROOT_PASS:-}" ]; then
+    while :; do
+        read -rsp "Please enter the MariaDB root password to set: " ROOT_PASS; echo
+        read -rsp "Please re-enter to confirm: " ROOT_PASS_CONFIRM; echo
+        if [ -n "$ROOT_PASS" ] && [ "$ROOT_PASS" = "$ROOT_PASS_CONFIRM" ]; then
+            break
+        fi
+        echo "Password is empty or does not match, please try again."
+    done
+    unset ROOT_PASS_CONFIRM
+fi
+
+# Exit immediately if a command exits with a non-zero status
+set -e
+
+# Logging setup
+exec > >(tee -i /var/log/setup_db.log)
+exec 2>&1
+
+# Update system packages
+sudo dnf update -y
+
+# Install EPEL repository (fail2ban lives here)
+sudo dnf install epel-release -y
+
+sudo dnf install cronie -y
+sudo systemctl enable crond
+sudo systemctl start crond
+
+# Install MariaDB
+sudo dnf install mariadb-server mariadb -y
+
+# Enable and start MariaDB
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+
+# Use mysqladmin to set the root password
+sudo mysqladmin -u root password "$ROOT_PASS"
+
+# Secure MariaDB installation, and add a root@<web-private-ip> account so the
+# web tier can connect over the VPC network (root@localhost still works locally).
+sudo mysql -u root -p"$ROOT_PASS" <<EOF
+DELETE FROM mysql.user WHERE User='';
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test_%';
+CREATE USER IF NOT EXISTS 'root'@'${WEB_PRIVATE_IP}' IDENTIFIED BY '${ROOT_PASS}';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'${WEB_PRIVATE_IP}' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+EOF
+
+# Save root credentials for cron/mysqldump so scripts never need the password on
+# the command line (which would otherwise leak into `ps aux` output).
+sudo bash -c "cat > /root/.my.cnf" <<EOF
+[client]
+user=root
+password=${ROOT_PASS}
+EOF
+sudo chmod 600 /root/.my.cnf
+
+# Bind MariaDB to the private VPC IP only - never listen on the public interface,
+# firewalld below is the second layer of defense, not the only one.
+sudo sed -i "s/^bind-address.*/bind-address = ${DB_PRIVATE_IP}/" /etc/my.cnf.d/mariadb-server.cnf
+
+# Size innodb_buffer_pool_size from total RAM (~60%, min 128M) - this box has no
+# Nginx/PHP competing for RAM anymore, so InnoDB can use most of it.
+RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+INNODB_MB=$(( RAM_MB * 60 / 100 ))
+[ "$INNODB_MB" -lt 128 ] && INNODB_MB=128
+echo "Detected ${RAM_MB}MB RAM -> innodb_buffer_pool_size=${INNODB_MB}M"
+if grep -q "^innodb_buffer_pool_size" /etc/my.cnf.d/mariadb-server.cnf; then
+    sudo sed -i "s/^innodb_buffer_pool_size.*/innodb_buffer_pool_size = ${INNODB_MB}M/" /etc/my.cnf.d/mariadb-server.cnf
+else
+    sudo sed -i "/^\[mysqld\]/a innodb_buffer_pool_size = ${INNODB_MB}M" /etc/my.cnf.d/mariadb-server.cnf
+fi
+
+sudo systemctl restart mariadb
+
+# Firewall: only the web server's private IP may reach 3306, and only ssh besides that.
+# No http/https/9119 here - this box has no web server on it.
+sudo firewall-cmd --permanent --add-port=2222/tcp
+sudo firewall-cmd --permanent --add-rich-rule="rule family='ipv4' source address='${WEB_PRIVATE_IP}' port protocol='tcp' port='3306' accept"
+sudo firewall-cmd --reload
+
+# Harden SSH: key-only login (no passwords), root allowed only via key, port 2222
+# WARNING: make sure your SSH public key is already in /root/.ssh/authorized_keys
+# (or your sudo user's) BEFORE running this - there is no password fallback after.
+sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sudo sed -i 's/^#Port 22/Port 2222/' /etc/ssh/sshd_config
+
+# Allow SELinux to permit SSH on port 2222
+sudo semanage port -a -t ssh_port_t -p tcp 2222
+
+# Validate config, then restart (won't restart on a bad config, so we don't lock ourselves out)
+sudo sshd -t && sudo systemctl restart sshd
+
+# Install Fail2Ban
+sudo dnf install fail2ban -y
+
+# Basic Fail2Ban configuration for SSH
+sudo bash -c 'cat > /etc/fail2ban/jail.local' <<EOF
+[sshd]
+enabled = true
+port    = 2222
+logpath = %(sshd_log)s
+backend = %(sshd_backend)s
+maxretry = 5
+bantime = 1h
+EOF
+
+# Enable and start Fail2Ban
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
+
+# Nightly mysqldump of every database, gzip'd, kept 7 days
+sudo mkdir -p /root/db_backups
+sudo bash -c 'cat > /etc/cron.daily/mysql_backup' <<'CRON'
+#!/bin/bash
+set -e
+BACKUP_DIR=/root/db_backups
+DATE=$(date +%F)
+mysqldump --all-databases | gzip > "$BACKUP_DIR/all-$DATE.sql.gz"
+find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete
+CRON
+sudo chmod 700 /etc/cron.daily/mysql_backup
+
+echo "MariaDB installation completed."
+echo "Listening on ${DB_PRIVATE_IP}:3306, reachable only from ${WEB_PRIVATE_IP} (firewalld) and only 'root'@'${WEB_PRIVATE_IP}' plus 'root'@'localhost' can authenticate."
+echo "Nightly backups: /root/db_backups (kept 7 days). Copy them off-box periodically - this server is a single point of failure for all data."
