@@ -140,15 +140,18 @@ sudo dnf install supervisor -y
 sudo systemctl enable supervisord
 sudo systemctl start supervisord
 
-# Disable root login via SSH and change SSH port to 2222
-#sudo sed -i 's/^#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+# Harden SSH: key-only login (no passwords), root allowed only via key, port 2222
+# WARNING: make sure your SSH public key is already in /root/.ssh/authorized_keys
+# (or your sudo user's) BEFORE running this - there is no password fallback after.
+sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 sudo sed -i 's/^#Port 22/Port 2222/' /etc/ssh/sshd_config
 
 # Allow SELinux to permit SSH on port 2222
 sudo semanage port -a -t ssh_port_t -p tcp 2222
 
-# Restart SSH service to disable root login
-sudo systemctl restart sshd
+# Validate config, then restart (won't restart on a bad config, so we don't lock ourselves out)
+sudo sshd -t && sudo systemctl restart sshd
 
 # Install Fail2Ban
 sudo dnf install fail2ban -y
