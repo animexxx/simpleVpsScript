@@ -51,6 +51,22 @@ sudo nginx -t
 sudo systemctl restart nginx
 echo "Added $domain"
 
+# Cron: Laravel's scheduler needs `artisan schedule:run` polled every minute
+# regardless of traffic; WordPress's wp-cron.php is normally triggered by a
+# visitor's page load, which is unreliable on low-traffic sites - a real cron
+# entry is the standard fix (and lets you disable WP's page-load trigger).
+if [[ "$IS_LARAVEL" =~ ^[Yy]$ ]]; then
+    echo "* * * * * root cd /home/$domain && php artisan schedule:run >> /dev/null 2>&1" | sudo tee "/etc/cron.d/$domain-cron" > /dev/null
+    echo "Added Laravel scheduler cron job (every minute)."
+else
+    echo "Is this WordPress? Add the wp-cron.php cron job? (y/n):"
+    read -r IS_WP
+    if [[ "$IS_WP" =~ ^[Yy]$ ]]; then
+        echo "*/5 * * * * root php $DOC_ROOT/wp-cron.php >> /dev/null 2>&1" | sudo tee "/etc/cron.d/$domain-cron" > /dev/null
+        echo "Added WordPress wp-cron.php cron job (every 5 minutes). Consider adding define('DISABLE_WP_CRON', true); to wp-config.php so it only runs from this cron, not on every page load."
+    fi
+fi
+
 # Optional: HTTPS via a Cloudflare Origin Certificate (for when this domain is
 # proxied through Cloudflare - orange cloud). Not Let's Encrypt/certbot: with
 # Cloudflare's proxy in front, the browser<->Cloudflare leg is already HTTPS,
