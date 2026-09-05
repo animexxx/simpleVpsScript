@@ -130,6 +130,50 @@ Check it's actually taking effect: `redis-cli -n 0 --scan | sed 's/:.*//' | sort
 
 ---
 
+## Diagnostics — quick reference
+
+Run these on the DB server unless noted otherwise.
+
+**Is the DB server overloaded / close to its connection limit?**
+```bash
+sudo mysql -e "SHOW GLOBAL STATUS LIKE 'Threads_connected';"
+```
+Compare against `max_connections` (`sudo mysql -e "SHOW VARIABLES LIKE 'max_connections';"`). Climbing steadily toward it under normal traffic is an early warning sign, not just a spike.
+
+**Is `innodb_buffer_pool_size` actually big enough for the combined working set of every DB on this box?**
+```bash
+sudo mysql -e "SHOW GLOBAL STATUS LIKE 'Innodb_buffer_pool_read%';"
+```
+`Innodb_buffer_pool_reads` (disk reads) staying high relative to `Innodb_buffer_pool_read_requests` (total reads) means the buffer pool is too small and MariaDB is hitting disk a lot — time to add RAM before adding another VPS.
+
+**Which site's queries are the slow ones?**
+```bash
+sudo mysqldumpslow -s t /var/log/mariadb/mariadb-slow.log   # sorted by total time, worst first
+sudo tail -100 /var/log/mariadb/mariadb-slow.log             # raw log; check the "Schema:" field for the DB name
+```
+Logged once a query takes longer than 2s (`long_query_time` in `setup_db.sh`).
+
+**Is MariaDB/Redis accidentally listening on the public interface?**
+```bash
+sudo ss -tlnp | grep -E ':(3306|6379)'
+```
+Should only show the DB server's private VPC IP (and `127.0.0.1` for Redis), never `0.0.0.0` or `*`. `setup_db.sh` checks this automatically right after install and prints a warning if not.
+
+**Are two WordPress sites' Redis caches colliding?** (Run on the web server, or anywhere that can reach Redis)
+```bash
+redis-cli -h <DB_PRIVATE_IP> -a '<password from /root/.redis_password>' --scan | sed 's/:.*//' | sort | uniq -c | sort -rn
+```
+Should show one distinct prefix per site with a nonzero count each. A prefix you don't recognize, or two sites sharing one, means `WP_CACHE_KEY_SALT` isn't unique between them (see above).
+
+**Where are the credentials?**
+| What | Where |
+|---|---|
+| MariaDB root password (for scripts/cron, no prompt needed) | `/root/.my.cnf` on the DB server |
+| Redis password | `/root/.redis_password` on the DB server |
+| Nightly DB backups | `/root/db_backups` on the DB server, one `.sql.gz` per database, 7 days |
+
+---
+
 ## Locking down phpMyAdmin further
 
 Basic auth + Fail2Ban stops casual scanners, but Fail2Ban bans by source IP — it does nothing against a botnet/rotating-proxy brute force where every attempt comes from a different address. Two options to close port 9119 to everyone except you, regardless of that:
