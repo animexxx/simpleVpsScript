@@ -16,6 +16,23 @@ if [ -z "${ROOT_PASS:-}" ]; then
     unset ROOT_PASS_CONFIRM
 fi
 
+# Basic-auth credentials that gate the phpMyAdmin URL - kept separate from the
+# MySQL root password above, so leaking one doesn't leak the other.
+if [ -z "${PMA_USER:-}" ]; then
+    read -rp "Choose a username for the phpMyAdmin basic-auth prompt: " PMA_USER
+fi
+if [ -z "${PMA_PASS:-}" ]; then
+    while :; do
+        read -rsp "Choose a password for that basic-auth prompt: " PMA_PASS; echo
+        read -rsp "Please re-enter to confirm: " PMA_PASS_CONFIRM; echo
+        if [ -n "$PMA_PASS" ] && [ "$PMA_PASS" = "$PMA_PASS_CONFIRM" ]; then
+            break
+        fi
+        echo "Password is empty or does not match, please try again."
+    done
+    unset PMA_PASS_CONFIRM
+fi
+
 # Exit immediately if a command exits with a non-zero status
 set -e
 
@@ -190,7 +207,7 @@ composer create-project phpmyadmin/phpmyadmin
 # Create a basic password-protected .htpasswd file
 sudo dnf install httpd-tools -y
 # Create a basic password-protected .htpasswd file with a password directly
-sudo htpasswd -cb /etc/nginx/.htpasswd root "$ROOT_PASS"
+sudo htpasswd -cb /etc/nginx/.htpasswd "$PMA_USER" "$PMA_PASS"
 
 > /etc/nginx/nginx.conf
 > /etc/nginx/conf.d/default.conf
@@ -323,4 +340,5 @@ echo 'cd /home' | sudo tee -a /root/.bashrc > /dev/null
 sudo nginx -t
 sudo systemctl restart nginx
 echo "LEMP, Supervisor, SSH, Fail2Ban, phpMyAdmin, and Git installation completed. You can test the setup by accessing http://server_ip_address:9119/ and http://server_ip_address:9119/phpmyadmin"
+echo "phpMyAdmin basic-auth user: $PMA_USER (then log in with MySQL user root and the MariaDB root password you set)."
 

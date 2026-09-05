@@ -86,7 +86,13 @@ sudo chmod 600 /root/.my.cnf
 
 # Bind MariaDB to the private VPC IP only - never listen on the public interface,
 # firewalld below is the second layer of defense, not the only one.
-sudo sed -i "s/^bind-address.*/bind-address = ${DB_PRIVATE_IP}/" /etc/my.cnf.d/mariadb-server.cnf
+# (The stock config usually has no bind-address line at all, so check rather
+# than assume the sed below would otherwise match nothing and silently no-op.)
+if grep -q "^bind-address" /etc/my.cnf.d/mariadb-server.cnf; then
+    sudo sed -i "s/^bind-address.*/bind-address = ${DB_PRIVATE_IP}/" /etc/my.cnf.d/mariadb-server.cnf
+else
+    sudo sed -i "/^\[mysqld\]/a bind-address = ${DB_PRIVATE_IP}" /etc/my.cnf.d/mariadb-server.cnf
+fi
 
 # Size innodb_buffer_pool_size from total RAM (~60%, min 128M) - this box has no
 # Nginx/PHP competing for RAM anymore, so InnoDB can use most of it.
@@ -114,13 +120,34 @@ sudo sed -i 's/^# maxmemory-policy noeviction/maxmemory-policy allkeys-lru/' /et
 
 # Bind to the private VPC IP (plus localhost) and require a password - same
 # defense-in-depth approach as MariaDB: network-restricted AND authenticated.
-sudo sed -i "s/^bind 127.0.0.1 -::1/bind 127.0.0.1 ${DB_PRIVATE_IP}/" /etc/redis/redis.conf
+# Checked rather than assumed to match, same reasoning as the MariaDB bind fix above.
+if grep -q "^bind " /etc/redis/redis.conf; then
+    sudo sed -i "s/^bind .*/bind 127.0.0.1 ${DB_PRIVATE_IP}/" /etc/redis/redis.conf
+else
+    echo "bind 127.0.0.1 ${DB_PRIVATE_IP}" | sudo tee -a /etc/redis/redis.conf > /dev/null
+fi
+
 REDIS_PASS=$(openssl rand -base64 24)
-sudo sed -i "s/^# requirepass foobared/requirepass ${REDIS_PASS}/" /etc/redis/redis.conf
+if grep -q "^# requirepass" /etc/redis/redis.conf; then
+    sudo sed -i "s/^# requirepass.*/requirepass ${REDIS_PASS}/" /etc/redis/redis.conf
+else
+    echo "requirepass ${REDIS_PASS}" | sudo tee -a /etc/redis/redis.conf > /dev/null
+fi
 echo "$REDIS_PASS" | sudo tee /root/.redis_password > /dev/null
 sudo chmod 600 /root/.redis_password
 
 sudo systemctl enable redis --now
+
+# Verify neither service ended up listening on all interfaces (0.0.0.0) - a
+# config-file mismatch on a different distro/version would otherwise fail
+# silently and leave firewalld as the only thing standing between the DB and
+# the public internet.
+sleep 1
+if sudo ss -tlnp | grep -E ':(3306|6379)\b' | grep -qE '0\.0\.0\.0|\*:'; then
+    echo "WARNING: MariaDB and/or Redis appear to be listening on ALL interfaces, not just ${DB_PRIVATE_IP}." >&2
+    echo "Check bind-address in /etc/my.cnf.d/mariadb-server.cnf and 'bind' in /etc/redis/redis.conf." >&2
+    sudo ss -tlnp | grep -E ':(3306|6379)\b' >&2
+fi
 
 # Firewall: only the web server's private IP may reach 3306/6379, and only ssh besides that.
 # No http/https/9119 here - this box has no web server on it.

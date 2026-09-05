@@ -25,7 +25,7 @@ chmod +x vps_setup.sh
 sudo ./vps_setup.sh
 ```
 
-You'll be prompted for the MariaDB root password (asked twice to confirm). It ends with phpMyAdmin reachable at `http://<server-ip>:9119/phpmyadmin`.
+You'll be prompted for the MariaDB root password, then a separate username/password for the basic-auth prompt in front of phpMyAdmin (each asked twice to confirm — the two are kept separate so leaking the basic-auth password doesn't leak the DB root password). It ends with phpMyAdmin reachable at `http://<server-ip>:9119/phpmyadmin`.
 
 ⚠️ **Before running:** SSH is hardened to key-only login (`PasswordAuthentication no`) partway through. Make sure your SSH public key is already in `/root/.ssh/authorized_keys` before you start, or you will lock yourself out (see the SSH section below).
 
@@ -69,6 +69,8 @@ Both `vps_setup.sh` and `setup_web.sh` size `pm.max_children` (and the related `
 ---
 
 ## Adding a site (`add_new_site.sh`)
+
+Before running this, point the domain's DNS at the VPS: an A record to the server's public IP (or, if proxied through Cloudflare, an A record with the orange-cloud proxy on — see the HTTPS section below for that case).
 
 Run this once per domain, on the web server (or the single all-in-one box):
 
