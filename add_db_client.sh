@@ -39,3 +39,7 @@ echo "Done. ${NEW_CLIENT_IP} can now reach this DB on 3306 (user 'root', same pa
 if sudo test -f /root/.redis_password; then
     echo "Redis password: $(sudo cat /root/.redis_password)"
 fi
+
+echo "=========================================="
+echo " ALL DONE!"
+echo "=========================================="

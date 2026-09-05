@@ -327,3 +327,6 @@ echo "Web tier (Nginx, PHP-FPM, Supervisor, SSH, Fail2Ban, phpMyAdmin, Git) inst
 echo "phpMyAdmin: http://server_ip_address:9119/phpmyadmin (basic-auth user: $PMA_USER, then log in with your MySQL credentials)"
 echo "phpMyAdmin is configured to talk to DB server ${DB_PRIVATE_IP}:3306 - make sure setup_db.sh has already run there and firewall/VPC allow this box's private IP through."
 echo "Redis also runs on ${DB_PRIVATE_IP}:6379 (not on this box) - in wp-config.php use WP_REDIS_HOST='${DB_PRIVATE_IP}' and the password setup_db.sh printed (also saved in /root/.redis_password on the DB server)."
+echo "=========================================="
+echo " ALL DONE!"
+echo "=========================================="

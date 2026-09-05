@@ -224,3 +224,6 @@ echo "MariaDB: ${DB_PRIVATE_IP}:3306, reachable only from ${WEB_PRIVATE_IP} (fir
 echo "Redis: ${DB_PRIVATE_IP}:6379, reachable only from ${WEB_PRIVATE_IP} (firewalld). Password: ${REDIS_PASS} (also saved in /root/.redis_password)."
 echo "Nightly backups: /root/db_backups (kept 7 days). Copy them off-box periodically - this server is a single point of failure for all data."
 echo "Slow query log: /var/log/mariadb/mariadb-slow.log (queries over 2s) - check the 'Schema:' field to see which site's DB is the heavy one."
+echo "=========================================="
+echo " ALL DONE!"
+echo "=========================================="

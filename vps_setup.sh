@@ -341,4 +341,7 @@ sudo nginx -t
 sudo systemctl restart nginx
 echo "LEMP, Supervisor, SSH, Fail2Ban, phpMyAdmin, and Git installation completed. You can test the setup by accessing http://server_ip_address:9119/ and http://server_ip_address:9119/phpmyadmin"
 echo "phpMyAdmin basic-auth user: $PMA_USER (then log in with MySQL user root and the MariaDB root password you set)."
+echo "=========================================="
+echo " ALL DONE!"
+echo "=========================================="
 

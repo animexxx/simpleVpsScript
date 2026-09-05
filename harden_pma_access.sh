@@ -56,3 +56,6 @@ echo "* * * * * root /usr/local/sbin/sync_pma_allow.sh >> /var/log/pma_allow_syn
 
 echo "Done. Only ${DDNS_HOSTNAME} (currently ${CURRENT_IP}) can reach port 9119; rechecked every minute."
 echo "If you ever get locked out (IP changed and hasn't synced yet), edit /etc/nginx/pma_allow.conf over SSH and reload nginx manually."
+echo "=========================================="
+echo " ALL DONE!"
+echo "=========================================="

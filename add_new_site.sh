@@ -171,3 +171,7 @@ HOOK
     echo "  git push production main"
     echo "Every push to 'production' will checkout straight into $WORK_TREE."
 fi
+
+echo "=========================================="
+echo " ALL DONE!"
+echo "=========================================="

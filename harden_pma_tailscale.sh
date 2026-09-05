@@ -34,3 +34,6 @@ sudo firewall-cmd --reload
 echo "Done. phpMyAdmin now only listens on ${TS_IP}:9119 (your tailnet)."
 echo "From any device on the same tailnet: http://${TS_IP}:9119/phpmyadmin"
 echo "Basic auth (.htpasswd) still applies as a second layer."
+echo "=========================================="
+echo " ALL DONE!"
+echo "=========================================="
