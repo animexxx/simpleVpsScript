@@ -80,7 +80,7 @@ chmod +x add_new_site.sh
 sudo ./add_new_site.sh
 ```
 
-It creates `/home/<domain>`, an Nginx vhost (`server_name <domain> www.<domain>`, so both apex and `www` work), and then offers two optional add-ons:
+It creates `/home/<domain>`, an Nginx vhost (`server_name <domain> www.<domain>`, so both apex and `www` work), asks whether the site is a **Laravel app** (if yes, the vhost's `root` points to `/home/<domain>/public` instead of `/home/<domain>` — Laravel's own `app/`, `vendor/`, `.env` etc. then stay outside the webroot automatically, since they're not under `public/`), and then offers two optional add-ons:
 
 ### HTTPS via a Cloudflare Origin Certificate
 

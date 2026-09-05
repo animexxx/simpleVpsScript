@@ -1,8 +1,20 @@
 #!/bin/bash
 set -e
-#input the new site domain 
+#input the new site domain
 echo "Enter the new site domain:"
 read domain
+
+# Laravel serves from a "public" subdirectory of the checkout, not the repo
+# root - everything else (app/, vendor/, .env, etc.) must stay outside the
+# webroot. Plain PHP/WordPress serve straight from the repo root.
+echo "Is this a Laravel app? (y/n):"
+read -r IS_LARAVEL
+if [[ "$IS_LARAVEL" =~ ^[Yy]$ ]]; then
+    DOC_ROOT="/home/$domain/public"
+else
+    DOC_ROOT="/home/$domain"
+fi
+
 #create dir
 mkdir -p "/home/$domain"
 #add nginx conf
@@ -12,7 +24,7 @@ server {
     listen       [::]:80;
     server_name  $domain www.$domain;
 
-    root   /home/$domain;
+    root   $DOC_ROOT;
     index  index.php index.html index.htm;
 		
     location / {
@@ -120,7 +132,7 @@ server {
     ssl_certificate     /etc/nginx/ssl/$domain/cert.pem;
     ssl_certificate_key /etc/nginx/ssl/$domain/key.pem;
 
-    root   /home/$domain;
+    root   $DOC_ROOT;
     index  index.php index.html index.htm;
 
     location / {
