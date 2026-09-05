@@ -155,11 +155,17 @@ if [[ "$ENABLE_GIT" =~ ^[Yy]$ ]]; then
 
     sudo mkdir -p "$GIT_DIR"
     sudo git init --bare -q "$GIT_DIR"
+    # Force HEAD to main regardless of this system's git default branch (still
+    # "master" on plenty of distros) - otherwise the first push creates
+    # refs/heads/main with real commits while HEAD still points at the empty
+    # "master" that never gets pushed, and the hook's checkout below fails
+    # with "yet to be born" trying to check out that empty branch.
+    sudo git symbolic-ref HEAD refs/heads/main
 
     sudo bash -c "cat > $GIT_DIR/hooks/post-receive" <<HOOK
 #!/bin/bash
 set -e
-git --work-tree=$WORK_TREE --git-dir=$GIT_DIR checkout -f
+git --work-tree=$WORK_TREE --git-dir=$GIT_DIR checkout -f main
 chown -R nginx:nginx $WORK_TREE
 chcon -R -t httpd_sys_rw_content_t $WORK_TREE 2>/dev/null || true
 echo "Deployed \$(date) -> $WORK_TREE"
