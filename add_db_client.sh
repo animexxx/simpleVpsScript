@@ -17,14 +17,16 @@ if ! sudo test -f /root/.my.cnf; then
     exit 1
 fi
 
-ROOT_PASS=$(sudo awk -F= '/^password=/{print $2; exit}' /root/.my.cnf)
+ROOT_PASS=$(sudo awk -F= '/^password=/{print $2; exit}' /root/.my.cnf | sed 's/^"//; s/"$//')
 if [ -z "$ROOT_PASS" ]; then
     echo "Could not read the root password from /root/.my.cnf." >&2
     exit 1
 fi
 
+# Escape any literal single quotes so the password can't break out of the SQL string below
+ROOT_PASS_SQL=${ROOT_PASS//\'/\'\'}
 sudo mysql <<EOF
-CREATE USER IF NOT EXISTS 'root'@'${NEW_CLIENT_IP}' IDENTIFIED BY '${ROOT_PASS}';
+CREATE USER IF NOT EXISTS 'root'@'${NEW_CLIENT_IP}' IDENTIFIED BY '${ROOT_PASS_SQL}';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'${NEW_CLIENT_IP}' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF

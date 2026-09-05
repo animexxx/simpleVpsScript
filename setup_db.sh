@@ -66,21 +66,25 @@ sudo mysqladmin -u root password "$ROOT_PASS"
 
 # Secure MariaDB installation, and add a root@<web-private-ip> account so the
 # web tier can connect over the VPC network (root@localhost still works locally).
+# Escape any literal single quotes in the password so it can't break out of
+# the SQL string below (same class of bug as the sed/slash one, different spot).
+ROOT_PASS_SQL=${ROOT_PASS//\'/\'\'}
 sudo mysql -u root -p"$ROOT_PASS" <<EOF
 DELETE FROM mysql.user WHERE User='';
 DROP DATABASE IF EXISTS test;
 DELETE FROM mysql.db WHERE Db='test' OR Db='test_%';
-CREATE USER IF NOT EXISTS 'root'@'${WEB_PRIVATE_IP}' IDENTIFIED BY '${ROOT_PASS}';
+CREATE USER IF NOT EXISTS 'root'@'${WEB_PRIVATE_IP}' IDENTIFIED BY '${ROOT_PASS_SQL}';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'${WEB_PRIVATE_IP}' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
 
 # Save root credentials for cron/mysqldump so scripts never need the password on
 # the command line (which would otherwise leak into `ps aux` output).
+# Quoted so a password containing '#' isn't truncated as an ini comment.
 sudo bash -c "cat > /root/.my.cnf" <<EOF
 [client]
 user=root
-password=${ROOT_PASS}
+password="${ROOT_PASS}"
 EOF
 sudo chmod 600 /root/.my.cnf
 
