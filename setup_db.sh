@@ -187,14 +187,18 @@ EOF
 sudo systemctl enable fail2ban
 sudo systemctl start fail2ban
 
-# Nightly mysqldump of every database, gzip'd, kept 7 days
+# Nightly mysqldump, one gzip'd file per database (not one giant combined
+# dump) so restoring a single site doesn't mean picking it out of everything
+# else, kept 7 days.
 sudo mkdir -p /root/db_backups
 sudo bash -c 'cat > /etc/cron.daily/mysql_backup' <<'CRON'
 #!/bin/bash
 set -e
 BACKUP_DIR=/root/db_backups
 DATE=$(date +%F)
-mysqldump --all-databases | gzip > "$BACKUP_DIR/all-$DATE.sql.gz"
+for db in $(mysql -N -e "SHOW DATABASES;" | grep -Ev "^(information_schema|performance_schema|mysql|sys)$"); do
+    mysqldump "$db" | gzip > "$BACKUP_DIR/${db}-$DATE.sql.gz"
+done
 find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete
 CRON
 sudo chmod 700 /etc/cron.daily/mysql_backup
