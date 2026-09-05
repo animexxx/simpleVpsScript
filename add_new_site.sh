@@ -48,20 +48,64 @@ echo "Added $domain"
 echo "Enable HTTPS for $domain using a Cloudflare Origin Certificate? (y/n):"
 read -r ENABLE_SSL
 if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
-    echo "In the Cloudflare dashboard: SSL/TLS -> Overview -> set mode to 'Full (strict)'."
-    echo "Then SSL/TLS -> Origin Server -> Create Certificate (cover $domain and *.$domain)."
-    echo "Save the certificate and private key as two files on this server (e.g. with nano), then enter their paths below."
-    read -rp "Path to the certificate .pem file: " CERT_PATH
-    read -rp "Path to the private key .pem file: " KEY_PATH
+    echo "In the Cloudflare dashboard: SSL/TLS -> Overview -> set mode to 'Full (strict)' (do this once per domain)."
 
-    if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
-        echo "Cert or key file not found, skipping HTTPS setup." >&2
-    else
-        sudo mkdir -p "/etc/nginx/ssl/$domain"
-        sudo cp "$CERT_PATH" "/etc/nginx/ssl/$domain/cert.pem"
-        sudo cp "$KEY_PATH" "/etc/nginx/ssl/$domain/key.pem"
-        sudo chmod 600 "/etc/nginx/ssl/$domain/key.pem"
+    SSL_DIR="/etc/nginx/ssl/$domain"
+    sudo mkdir -p "$SSL_DIR"
+    CERT_READY=0
 
+    echo "Auto-create the certificate via the Cloudflare API instead of copy-pasting from the dashboard? (y/n):"
+    read -r USE_CF_API
+    if [[ "$USE_CF_API" =~ ^[Yy]$ ]]; then
+        # Needs jq to parse the API response
+        command -v jq >/dev/null 2>&1 || sudo dnf install jq -y
+
+        # One-time per account, not per domain: dashboard -> My Profile -> API Tokens -> Origin CA Key
+        if [ -z "${CF_ORIGIN_CA_KEY:-}" ]; then
+            read -rsp "Enter your Cloudflare Origin CA Key (My Profile > API Tokens > Origin CA Key, same key works for every future domain): " CF_ORIGIN_CA_KEY
+            echo
+        fi
+
+        CSR_PATH=$(mktemp)
+        sudo openssl req -new -newkey rsa:2048 -nodes \
+            -keyout "$SSL_DIR/key.pem" \
+            -out "$CSR_PATH" \
+            -subj "/CN=$domain" >/dev/null 2>&1
+
+        CSR_JSON=$(sudo awk '{printf "%s\\n", $0}' "$CSR_PATH")
+        RESPONSE=$(curl -s https://api.cloudflare.com/client/v4/certificates \
+            -H "X-Auth-User-Service-Key: $CF_ORIGIN_CA_KEY" \
+            -H "Content-Type: application/json" \
+            --data "{\"hostnames\":[\"$domain\",\"*.$domain\"],\"requested_validity\":5475,\"request_type\":\"origin-rsa\",\"csr\":\"$CSR_JSON\"}")
+        rm -f "$CSR_PATH"
+
+        if [ "$(echo "$RESPONSE" | jq -r '.success')" = "true" ]; then
+            echo "$RESPONSE" | jq -r '.result.certificate' | sudo tee "$SSL_DIR/cert.pem" >/dev/null
+            sudo chmod 600 "$SSL_DIR/key.pem"
+            CERT_READY=1
+            echo "Certificate created via Cloudflare API (valid 15 years)."
+        else
+            echo "Cloudflare API call failed, falling back to manual: $(echo "$RESPONSE" | jq -c '.errors')" >&2
+        fi
+    fi
+
+    if [ "$CERT_READY" -eq 0 ]; then
+        echo "SSL/TLS -> Origin Server -> Create Certificate (cover $domain and *.$domain) in the dashboard."
+        echo "Save the certificate and private key as two files on this server (e.g. with nano), then enter their paths below."
+        read -rp "Path to the certificate .pem file: " CERT_PATH
+        read -rp "Path to the private key .pem file: " KEY_PATH
+
+        if [ ! -f "$CERT_PATH" ] || [ ! -f "$KEY_PATH" ]; then
+            echo "Cert or key file not found, skipping HTTPS setup." >&2
+        else
+            sudo cp "$CERT_PATH" "$SSL_DIR/cert.pem"
+            sudo cp "$KEY_PATH" "$SSL_DIR/key.pem"
+            sudo chmod 600 "$SSL_DIR/key.pem"
+            CERT_READY=1
+        fi
+    fi
+
+    if [ "$CERT_READY" -eq 1 ]; then
         sudo bash -c "cat >> /etc/nginx/conf.d/$domain.conf" <<EOF
 
 server {
