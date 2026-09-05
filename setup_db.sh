@@ -1,5 +1,9 @@
 #!/bin/bash
-# DB tier only: MariaDB, reachable exclusively over Vultr's private VPC network.
+# DB tier only: MariaDB + Redis, both reachable exclusively over Vultr's
+# private VPC network. Redis lives here (not on the web tier) so that if you
+# add more web/app servers later (see add_db_client.sh) they all share ONE
+# Redis instead of each running its own - one cache to manage, one place to
+# check hit rate, no per-box config drift.
 # Run this first, then setup_web.sh on the other VPS pointing at this box's private IP.
 
 # --- This server's own private VPC IP (what MariaDB will bind/listen on) ---
@@ -98,10 +102,31 @@ fi
 
 sudo systemctl restart mariadb
 
-# Firewall: only the web server's private IP may reach 3306, and only ssh besides that.
+# Install Redis (object cache backend for WordPress on the web tier)
+sudo dnf install redis -y
+
+# Limit Redis memory so cache growth doesn't starve MariaDB
+# 128mb for 1-2GB RAM, 256mb for >=4GB; allkeys-lru evicts old keys instead of erroring
+REDIS_MAXMEM=128mb
+[ "$RAM_MB" -ge 3500 ] && REDIS_MAXMEM=256mb
+sudo sed -i "s/^# maxmemory <bytes>/maxmemory ${REDIS_MAXMEM}/" /etc/redis/redis.conf
+sudo sed -i 's/^# maxmemory-policy noeviction/maxmemory-policy allkeys-lru/' /etc/redis/redis.conf
+
+# Bind to the private VPC IP (plus localhost) and require a password - same
+# defense-in-depth approach as MariaDB: network-restricted AND authenticated.
+sudo sed -i "s/^bind 127.0.0.1 -::1/bind 127.0.0.1 ${DB_PRIVATE_IP}/" /etc/redis/redis.conf
+REDIS_PASS=$(openssl rand -base64 24)
+sudo sed -i "s/^# requirepass foobared/requirepass ${REDIS_PASS}/" /etc/redis/redis.conf
+echo "$REDIS_PASS" | sudo tee /root/.redis_password > /dev/null
+sudo chmod 600 /root/.redis_password
+
+sudo systemctl enable redis --now
+
+# Firewall: only the web server's private IP may reach 3306/6379, and only ssh besides that.
 # No http/https/9119 here - this box has no web server on it.
 sudo firewall-cmd --permanent --add-port=2222/tcp
 sudo firewall-cmd --permanent --add-rich-rule="rule family='ipv4' source address='${WEB_PRIVATE_IP}' port protocol='tcp' port='3306' accept"
+sudo firewall-cmd --permanent --add-rich-rule="rule family='ipv4' source address='${WEB_PRIVATE_IP}' port protocol='tcp' port='6379' accept"
 sudo firewall-cmd --reload
 
 # Harden SSH: key-only login (no passwords), root allowed only via key, port 2222
@@ -147,6 +172,7 @@ find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete
 CRON
 sudo chmod 700 /etc/cron.daily/mysql_backup
 
-echo "MariaDB installation completed."
-echo "Listening on ${DB_PRIVATE_IP}:3306, reachable only from ${WEB_PRIVATE_IP} (firewalld) and only 'root'@'${WEB_PRIVATE_IP}' plus 'root'@'localhost' can authenticate."
+echo "MariaDB + Redis installation completed."
+echo "MariaDB: ${DB_PRIVATE_IP}:3306, reachable only from ${WEB_PRIVATE_IP} (firewalld) and only 'root'@'${WEB_PRIVATE_IP}' plus 'root'@'localhost' can authenticate."
+echo "Redis: ${DB_PRIVATE_IP}:6379, reachable only from ${WEB_PRIVATE_IP} (firewalld). Password: ${REDIS_PASS} (also saved in /root/.redis_password)."
 echo "Nightly backups: /root/db_backups (kept 7 days). Copy them off-box periodically - this server is a single point of failure for all data."

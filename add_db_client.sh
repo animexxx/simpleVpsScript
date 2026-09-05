@@ -1,8 +1,9 @@
 #!/bin/bash
 # Run this ON THE DB SERVER (setup_db.sh) to let another VPS (a new app/web
-# server on the same VPC) reach this MariaDB instance. It only opens the
-# firewall to that one IP and grants root@<that-ip> - it does not touch
-# any existing site/DB.
+# server on the same VPC) reach this MariaDB + Redis instance. It only opens
+# the firewall to that one IP and grants root@<that-ip> - it does not touch
+# any existing site/DB, and Redis stays a single shared instance rather than
+# each web server running its own.
 set -e
 
 read -rp "Enter the new app/web server's private VPC IP to allow: " NEW_CLIENT_IP
@@ -29,6 +30,10 @@ FLUSH PRIVILEGES;
 EOF
 
 sudo firewall-cmd --permanent --add-rich-rule="rule family='ipv4' source address='${NEW_CLIENT_IP}' port protocol='tcp' port='3306' accept"
+sudo firewall-cmd --permanent --add-rich-rule="rule family='ipv4' source address='${NEW_CLIENT_IP}' port protocol='tcp' port='6379' accept"
 sudo firewall-cmd --reload
 
-echo "Done. ${NEW_CLIENT_IP} can now reach this DB on 3306 and log in as 'root' with the same password as the other web server."
+echo "Done. ${NEW_CLIENT_IP} can now reach this DB on 3306 (user 'root', same password as the other web server) and Redis on 6379."
+if sudo test -f /root/.redis_password; then
+    echo "Redis password: $(sudo cat /root/.redis_password)"
+fi

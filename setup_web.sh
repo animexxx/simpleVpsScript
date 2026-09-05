@@ -1,7 +1,10 @@
 #!/bin/bash
-# Web tier only: Nginx + PHP-FPM + Redis + phpMyAdmin + Composer + Supervisor.
-# MariaDB lives on a separate VPS, reached over Vultr's private VPC network.
-# Run setup_db.sh on that other VPS first, then this one.
+# Web tier only: Nginx + PHP-FPM + phpMyAdmin + Composer + Supervisor.
+# MariaDB and Redis both live on a separate VPS, reached over Vultr's private
+# VPC network (Redis lives there too, not here, so a fleet of web servers all
+# share ONE Redis instead of each running its own - one cache to manage, one
+# place to see hit rate, no per-box drift). Run setup_db.sh on that other VPS
+# first, then this one.
 
 # --- Where is the database server? (its VPC private IP, e.g. 10.x.x.x) ---
 if [ -z "${DB_PRIVATE_IP:-}" ]; then
@@ -59,18 +62,9 @@ sudo dnf install nginx -y
 sudo systemctl enable nginx
 sudo systemctl start nginx
 
-# Install Redis and PHP Redis module (object cache for WordPress)
-sudo dnf install redis php-redis -y
-
-# Limit Redis memory so cache growth doesn't starve PHP on small VPS
-# 128mb for 1-2GB RAM, 256mb for >=4GB; allkeys-lru evicts old keys instead of erroring
-REDIS_MAXMEM=128mb
-[ "$(free -m | awk '/^Mem:/{print $2}')" -ge 3500 ] && REDIS_MAXMEM=256mb
-sudo sed -i "s/^# maxmemory <bytes>/maxmemory ${REDIS_MAXMEM}/" /etc/redis/redis.conf
-sudo sed -i 's/^# maxmemory-policy noeviction/maxmemory-policy allkeys-lru/' /etc/redis/redis.conf
-
-# Enable and start Redis (defaults already bind 127.0.0.1 + protected-mode on)
-sudo systemctl enable redis --now
+# PHP Redis client module - Redis itself runs on the DB server (setup_db.sh),
+# this box only needs the driver to talk to it over the VPC network.
+sudo dnf install php-redis -y
 
 # Install PHP and necessary PHP extensions (mysqlnd talks to the remote DB over VPC)
 sudo dnf install php php-fpm php-zip php-sodium php-bz2 php-opcache php-cli php-mysqlnd php-json php-opcache php-xml php-gd php-mbstring php-mcrypt php-xml -y
@@ -329,6 +323,7 @@ echo 'cd /home' | sudo tee -a /root/.bashrc > /dev/null
 sudo nginx -t
 sudo systemctl restart nginx
 
-echo "Web tier (Nginx, PHP-FPM, Redis, Supervisor, SSH, Fail2Ban, phpMyAdmin, Git) installation completed."
+echo "Web tier (Nginx, PHP-FPM, Supervisor, SSH, Fail2Ban, phpMyAdmin, Git) installation completed."
 echo "phpMyAdmin: http://server_ip_address:9119/phpmyadmin (basic-auth user: $PMA_USER, then log in with your MySQL credentials)"
 echo "phpMyAdmin is configured to talk to DB server ${DB_PRIVATE_IP}:3306 - make sure setup_db.sh has already run there and firewall/VPC allow this box's private IP through."
+echo "Redis also runs on ${DB_PRIVATE_IP}:6379 (not on this box) - in wp-config.php use WP_REDIS_HOST='${DB_PRIVATE_IP}' and the password setup_db.sh printed (also saved in /root/.redis_password on the DB server)."
