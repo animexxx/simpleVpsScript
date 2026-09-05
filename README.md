@@ -51,7 +51,8 @@ Two VPS instances on the same private VPC network. MariaDB and Redis live on the
    - MariaDB, bound to the private IP only, `innodb_buffer_pool_size` auto-sized to ~60% of RAM
    - Redis, bound to the private IP only, password auto-generated and saved to `/root/.redis_password`
    - firewalld rules restricting 3306 and 6379 to the web server's private IP specifically (not the whole subnet)
-   - nightly `mysqldump --all-databases`, gzip'd, kept 7 days, in `/root/db_backups`
+   - nightly backup: one gzip'd `mysqldump --single-transaction --quick` per database (not one combined dump, so restoring a single site is just one file) kept 7 days in `/root/db_backups`
+   - slow query log (`/var/log/mariadb/mariadb-slow.log`, queries over 2s) - with several sites sharing one DB server, this is how you find out later which site's queries are the heavy ones (check the `Schema:` field in the log)
    - SSH hardening + Fail2Ban (same as Option A)
 4. On the **web VPS**:
    ```bash

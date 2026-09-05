@@ -106,6 +106,16 @@ else
     sudo sed -i "/^\[mysqld\]/a innodb_buffer_pool_size = ${INNODB_MB}M" /etc/my.cnf.d/mariadb-server.cnf
 fi
 
+# Slow query log - with several sites sharing one DB server, this is how you
+# find out later which site's queries are actually the heavy ones. The log's
+# "Schema:" field names the database per slow query, even though every site
+# currently connects as the same 'root' user.
+sudo mkdir -p /var/log/mariadb
+sudo chown mysql:mysql /var/log/mariadb
+sudo sed -i "/^\[mysqld\]/a slow_query_log = 1" /etc/my.cnf.d/mariadb-server.cnf
+sudo sed -i "/^\[mysqld\]/a slow_query_log_file = /var/log/mariadb/mariadb-slow.log" /etc/my.cnf.d/mariadb-server.cnf
+sudo sed -i "/^\[mysqld\]/a long_query_time = 2" /etc/my.cnf.d/mariadb-server.cnf
+
 sudo systemctl restart mariadb
 
 # Install Redis (object cache backend for WordPress on the web tier)
@@ -189,7 +199,9 @@ sudo systemctl start fail2ban
 
 # Nightly mysqldump, one gzip'd file per database (not one giant combined
 # dump) so restoring a single site doesn't mean picking it out of everything
-# else, kept 7 days.
+# else, kept 7 days. --single-transaction takes a consistent InnoDB snapshot
+# without holding table locks, so the backup doesn't stall live sites while
+# it runs; --quick streams rows instead of buffering the whole table in RAM.
 sudo mkdir -p /root/db_backups
 sudo bash -c 'cat > /etc/cron.daily/mysql_backup' <<'CRON'
 #!/bin/bash
@@ -197,7 +209,7 @@ set -e
 BACKUP_DIR=/root/db_backups
 DATE=$(date +%F)
 for db in $(mysql -N -e "SHOW DATABASES;" | grep -Ev "^(information_schema|performance_schema|mysql|sys)$"); do
-    mysqldump "$db" | gzip > "$BACKUP_DIR/${db}-$DATE.sql.gz"
+    mysqldump --single-transaction --quick "$db" | gzip > "$BACKUP_DIR/${db}-$DATE.sql.gz"
 done
 find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete
 CRON
@@ -207,3 +219,4 @@ echo "MariaDB + Redis installation completed."
 echo "MariaDB: ${DB_PRIVATE_IP}:3306, reachable only from ${WEB_PRIVATE_IP} (firewalld) and only 'root'@'${WEB_PRIVATE_IP}' plus 'root'@'localhost' can authenticate."
 echo "Redis: ${DB_PRIVATE_IP}:6379, reachable only from ${WEB_PRIVATE_IP} (firewalld). Password: ${REDIS_PASS} (also saved in /root/.redis_password)."
 echo "Nightly backups: /root/db_backups (kept 7 days). Copy them off-box periodically - this server is a single point of failure for all data."
+echo "Slow query log: /var/log/mariadb/mariadb-slow.log (queries over 2s) - check the 'Schema:' field to see which site's DB is the heavy one."
