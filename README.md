@@ -80,7 +80,7 @@ chmod +x add_new_site.sh
 sudo ./add_new_site.sh
 ```
 
-It creates `/home/<domain>`, an Nginx vhost (`server_name <domain> www.<domain>`, so both apex and `www` work), asks whether the site is a **Laravel app** (if yes, the vhost's `root` points to `/home/<domain>/public` instead of `/home/<domain>` — Laravel's own `app/`, `vendor/`, `.env` etc. then stay outside the webroot automatically, since they're not under `public/`), sets up the matching **cron job** for whichever it is (Laravel: `php artisan schedule:run` every minute; WordPress, if you say yes when asked: `wp-cron.php` every 5 minutes — consider also adding `define('DISABLE_WP_CRON', true);` to `wp-config.php` so it only runs from this cron instead of on every page load too), and then offers two optional add-ons:
+It creates `/home/<domain>`, an Nginx vhost (`server_name <domain> www.<domain>`, so both apex and `www` work), asks whether the site is a **Laravel app** (if yes, the vhost's `root` points to `/home/<domain>/public` instead of `/home/<domain>` — Laravel's own `app/`, `vendor/`, `.env` etc. then stay outside the webroot automatically, since they're not under `public/`), sets up the matching **cron job** for whichever it is (Laravel: `php artisan schedule:run` every minute; WordPress, if you say yes when asked: `wp-cron.php` every 5 minutes — consider also adding `define('DISABLE_WP_CRON', true);` to `wp-config.php` so it only runs from this cron instead of on every page load too), added straight into root's crontab (`crontab -e` to see/edit everything in one place, each entry tagged with a `# <domain>` comment so re-running the script for the same domain doesn't duplicate it), and then offers two optional add-ons:
 
 ### HTTPS via a Cloudflare Origin Certificate
 

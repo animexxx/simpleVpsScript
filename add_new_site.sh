@@ -55,15 +55,27 @@ echo "Added $domain"
 # regardless of traffic; WordPress's wp-cron.php is normally triggered by a
 # visitor's page load, which is unreliable on low-traffic sites - a real cron
 # entry is the standard fix (and lets you disable WP's page-load trigger).
+# Added straight into root's crontab (not a separate /etc/cron.d file) so
+# everything lives in one place you can see/edit with `crontab -e`. Tagged
+# with a comment per domain so re-running this script doesn't add duplicates.
 if [[ "$IS_LARAVEL" =~ ^[Yy]$ ]]; then
-    echo "* * * * * root cd /home/$domain && php artisan schedule:run >> /dev/null 2>&1" | sudo tee "/etc/cron.d/$domain-cron" > /dev/null
-    echo "Added Laravel scheduler cron job (every minute)."
+    CRON_TAG="# $domain (Laravel scheduler)"
+    CRON_LINE="* * * * * cd /home/$domain && php artisan schedule:run >> /dev/null 2>&1"
+    if ! sudo crontab -l 2>/dev/null | grep -qF "$CRON_TAG"; then
+        (sudo crontab -l 2>/dev/null; echo "$CRON_TAG"; echo "$CRON_LINE") | sudo crontab -
+    fi
+    echo "Added Laravel scheduler cron job to root's crontab (every minute) - run 'crontab -e' to view/edit."
 else
     echo "Is this WordPress? Add the wp-cron.php cron job? (y/n):"
     read -r IS_WP
     if [[ "$IS_WP" =~ ^[Yy]$ ]]; then
-        echo "*/5 * * * * root php $DOC_ROOT/wp-cron.php >> /dev/null 2>&1" | sudo tee "/etc/cron.d/$domain-cron" > /dev/null
-        echo "Added WordPress wp-cron.php cron job (every 5 minutes). Consider adding define('DISABLE_WP_CRON', true); to wp-config.php so it only runs from this cron, not on every page load."
+        CRON_TAG="# $domain (wp-cron)"
+        CRON_LINE="*/5 * * * * php $DOC_ROOT/wp-cron.php >> /dev/null 2>&1"
+        if ! sudo crontab -l 2>/dev/null | grep -qF "$CRON_TAG"; then
+            (sudo crontab -l 2>/dev/null; echo "$CRON_TAG"; echo "$CRON_LINE") | sudo crontab -
+        fi
+        echo "Added WordPress wp-cron.php cron job to root's crontab (every 5 minutes) - run 'crontab -e' to view/edit."
+        echo "Consider adding define('DISABLE_WP_CRON', true); to wp-config.php so it only runs from this cron, not on every page load."
     fi
 fi
 
