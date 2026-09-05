@@ -60,9 +60,13 @@ if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
         # Needs jq to parse the API response
         command -v jq >/dev/null 2>&1 || sudo dnf install jq -y
 
-        # One-time per account, not per domain: dashboard -> My Profile -> API Tokens -> Origin CA Key
+        # One-time per account, not per domain: dashboard -> My Profile -> API Tokens ->
+        # Create Token -> permission "Zone / SSL and Certificates / Edit", zone resource
+        # "All zones" (or the specific zone). The old "Origin CA Key" is deprecated
+        # (removed 2026-09-30) - this needs a regular API Token now, sent as a Bearer
+        # token, not the legacy X-Auth-User-Service-Key header.
         if [ -z "${CF_ORIGIN_CA_KEY:-}" ]; then
-            read -rsp "Enter your Cloudflare Origin CA Key (My Profile > API Tokens > Origin CA Key, same key works for every future domain): " CF_ORIGIN_CA_KEY
+            read -rsp "Enter your Cloudflare API Token (Zone > SSL and Certificates > Edit permission; same token works for every future domain): " CF_ORIGIN_CA_KEY
             echo
         fi
 
@@ -74,7 +78,7 @@ if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
 
         CSR_JSON=$(sudo awk '{printf "%s\\n", $0}' "$CSR_PATH")
         RESPONSE=$(curl -s https://api.cloudflare.com/client/v4/certificates \
-            -H "X-Auth-User-Service-Key: $CF_ORIGIN_CA_KEY" \
+            -H "Authorization: Bearer $CF_ORIGIN_CA_KEY" \
             -H "Content-Type: application/json" \
             --data "{\"hostnames\":[\"$domain\",\"*.$domain\"],\"requested_validity\":5475,\"request_type\":\"origin-rsa\",\"csr\":\"$CSR_JSON\"}")
         rm -f "$CSR_PATH"
