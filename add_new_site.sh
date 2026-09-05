@@ -63,12 +63,26 @@ if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
     echo "In the Cloudflare dashboard: SSL/TLS -> Overview -> set mode to 'Full (strict)' (do this once per domain)."
 
     SSL_DIR="/etc/nginx/ssl/$domain"
-    sudo mkdir -p "$SSL_DIR"
     CERT_READY=0
 
-    echo "Auto-create the certificate via the Cloudflare API instead of copy-pasting from the dashboard? (y/n):"
-    read -r USE_CF_API
-    if [[ "$USE_CF_API" =~ ^[Yy]$ ]]; then
+    # Reuse a certificate already issued for the parent domain if this looks like
+    # a subdomain of a site already set up here - add_new_site.sh always requests
+    # both "<domain>" and "*.<domain>" when it creates a cert, so an existing
+    # parent cert already covers this subdomain and a new one would be redundant
+    # (and an extra Cloudflare API call for nothing).
+    PARENT_DOMAIN="${domain#*.}"
+    if [ "$PARENT_DOMAIN" != "$domain" ] && sudo test -f "/etc/nginx/ssl/$PARENT_DOMAIN/cert.pem" && sudo test -f "/etc/nginx/ssl/$PARENT_DOMAIN/key.pem"; then
+        echo "Found an existing certificate for $PARENT_DOMAIN that already covers *.$PARENT_DOMAIN - reusing it instead of creating a new one."
+        SSL_DIR="/etc/nginx/ssl/$PARENT_DOMAIN"
+        CERT_READY=1
+    else
+        sudo mkdir -p "$SSL_DIR"
+    fi
+
+    if [ "$CERT_READY" -eq 0 ]; then
+        echo "Auto-create the certificate via the Cloudflare API instead of copy-pasting from the dashboard? (y/n):"
+        read -r USE_CF_API
+        if [[ "$USE_CF_API" =~ ^[Yy]$ ]]; then
         # Needs jq to parse the API response
         command -v jq >/dev/null 2>&1 || sudo dnf install jq -y
 
@@ -120,6 +134,7 @@ if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
             CERT_READY=1
         fi
     fi
+    fi
 
     if [ "$CERT_READY" -eq 1 ]; then
         sudo bash -c "cat >> /etc/nginx/conf.d/$domain.conf" <<EOF
@@ -129,8 +144,8 @@ server {
     listen       [::]:443 ssl;
     server_name  $domain www.$domain;
 
-    ssl_certificate     /etc/nginx/ssl/$domain/cert.pem;
-    ssl_certificate_key /etc/nginx/ssl/$domain/key.pem;
+    ssl_certificate     $SSL_DIR/cert.pem;
+    ssl_certificate_key $SSL_DIR/key.pem;
 
     root   $DOC_ROOT;
     index  index.php index.html index.htm;
@@ -152,9 +167,9 @@ server {
     }
 }
 EOF
-        sudo chcon -R -t httpd_sys_rw_content_t "/etc/nginx/ssl/$domain" 2>/dev/null || true
+        sudo chcon -R -t httpd_sys_rw_content_t "$SSL_DIR" 2>/dev/null || true
         sudo nginx -t && sudo systemctl restart nginx
-        echo "HTTPS enabled for $domain on port 443. Make sure Cloudflare SSL/TLS mode is 'Full (strict)'."
+        echo "HTTPS enabled for $domain on port 443 (cert: $SSL_DIR). Make sure Cloudflare SSL/TLS mode is 'Full (strict)'."
     fi
 fi
 

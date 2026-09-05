@@ -86,7 +86,9 @@ It creates `/home/<domain>`, an Nginx vhost (`server_name <domain> www.<domain>`
 
 Only relevant if the domain is **proxied through Cloudflare** (orange cloud). Not certbot/Let's Encrypt — with Cloudflare in front, the browser↔Cloudflare leg is already HTTPS; what the origin needs is a certificate Cloudflare trusts for the Cloudflare↔VPS leg, which is exactly what an Origin Certificate is for (15-year validity, no renewal cron).
 
-Two ways the script can get one:
+**Adding a subdomain of a site already set up here?** The script always requests both `<domain>` and `*.<domain>` when it creates a certificate, so a subdomain (e.g. `blog.example.com` when `example.com` already has HTTPS enabled) is already covered by the parent's existing wildcard cert. It checks for that automatically — if `/etc/nginx/ssl/<parent-domain>/` already has a cert, it reuses it and skips straight to writing the vhost, with no prompts and no new Cloudflare API call.
+
+Otherwise, two ways the script can get one:
 - **Automatic (recommended)**: generates a key + CSR locally and calls the Cloudflare API. Needs a one-time **API Token** from your Cloudflare account: dashboard → *My Profile → API Tokens → Create Token* → custom token with permission **Zone / SSL and Certificates / Edit**, zone resource **All zones** (or a specific zone). The same token is reused for every future domain (export `CF_ORIGIN_CA_KEY` to skip the prompt entirely on future runs). Note: Cloudflare's older "Origin CA Key" is deprecated (removed 2026-09-30) — don't use that, a regular API Token is what this script sends now.
 - **Manual fallback**: if you skip the API or it fails, the script asks for the paths to a cert/key you already created via *SSL/TLS → Origin Server → Create Certificate* in the dashboard and saved to the server yourself.
 
