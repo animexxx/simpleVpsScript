@@ -112,9 +112,9 @@ fi
 # currently connects as the same 'root' user.
 sudo mkdir -p /var/log/mariadb
 sudo chown mysql:mysql /var/log/mariadb
-sudo sed -i "/^\[mysqld\]/a slow_query_log = 1" /etc/my.cnf.d/mariadb-server.cnf
-sudo sed -i "/^\[mysqld\]/a slow_query_log_file = /var/log/mariadb/mariadb-slow.log" /etc/my.cnf.d/mariadb-server.cnf
-sudo sed -i "/^\[mysqld\]/a long_query_time = 2" /etc/my.cnf.d/mariadb-server.cnf
+grep -q "^slow_query_log " /etc/my.cnf.d/mariadb-server.cnf || sudo sed -i "/^\[mysqld\]/a slow_query_log = 1" /etc/my.cnf.d/mariadb-server.cnf
+grep -q "^slow_query_log_file" /etc/my.cnf.d/mariadb-server.cnf || sudo sed -i "/^\[mysqld\]/a slow_query_log_file = /var/log/mariadb/mariadb-slow.log" /etc/my.cnf.d/mariadb-server.cnf
+grep -q "^long_query_time" /etc/my.cnf.d/mariadb-server.cnf || sudo sed -i "/^\[mysqld\]/a long_query_time = 2" /etc/my.cnf.d/mariadb-server.cnf
 
 sudo systemctl restart mariadb
 
@@ -137,7 +137,7 @@ else
     echo "bind 127.0.0.1 ${DB_PRIVATE_IP}" | sudo tee -a /etc/redis/redis.conf > /dev/null
 fi
 
-REDIS_PASS=$(openssl rand -base64 24)
+REDIS_PASS=$(openssl rand -hex 24)
 if grep -q "^# requirepass" /etc/redis/redis.conf; then
     sudo sed -i "s/^# requirepass.*/requirepass ${REDIS_PASS}/" /etc/redis/redis.conf
 else
