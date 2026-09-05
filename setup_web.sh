@@ -313,14 +313,14 @@ sudo semanage port -a -t http_port_t  -p tcp 9119
 sudo setsebool -P httpd_can_network_connect 1
 sudo chcon -t httpd_sys_rw_content_t /home/html -R
 
-# Set /home as the default directory for SSH and SFTP
-# Change root's home directory to /home so SFTP clients land in /home by default.
-# Not usermod: it refuses this on a live system because PID 1 (init) is always
-# owned by root, so it always errors with "user root is currently used by
-# process 1" - editing /etc/passwd's home-directory field directly has no such
-# check and is what usermod would have done anyway.
-sudo sed -i -E "s|^root:([^:]*):([^:]*):([^:]*):([^:]*):[^:]*:(.*)\$|root:\1:\2:\3:\4:/home:\5|" /etc/passwd
-# Ensure SSH sessions also start in /home
+# Make interactive SSH shells land in /home by default. NOT by changing root's
+# actual home directory in /etc/passwd: sshd looks up ~/.ssh/authorized_keys
+# relative to whatever that field says, so moving it to /home while the real
+# key lives at /root/.ssh/authorized_keys locks out key-based SSH the next
+# time you connect (with PasswordAuthentication no, there is no fallback -
+# recovery needs the VPS provider's console). A .bashrc line is enough for
+# interactive shells and doesn't touch anything auth-related; SFTP clients
+# will still land in /root, which is a fine tradeoff for not risking lockout.
 echo 'cd /home' | sudo tee -a /root/.bashrc > /dev/null
 
 # Test Nginx configuration and restart Nginx
