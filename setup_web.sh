@@ -184,6 +184,7 @@ sudo bash -c "cat > /home/html/phpmyadmin/config.inc.php" <<EOF
 \$cfg['Servers'][\$i]['host'] = '${DB_PRIVATE_IP}';
 \$cfg['Servers'][\$i]['port'] = 3306;
 \$cfg['Servers'][\$i]['auth_type'] = 'cookie';
+\$cfg['Servers'][\$i]['DisableIS'] = true;
 \$cfg['UploadDir'] = '';
 \$cfg['SaveDir'] = '';
 EOF
