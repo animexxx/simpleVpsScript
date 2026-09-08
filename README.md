@@ -98,6 +98,8 @@ Either way, set Cloudflare's SSL/TLS mode to **Full (strict)** in the dashboard 
 
 Push straight from your PC to this VPS — no GitHub involved. Creates a bare repo at `/home/git/<domain>.git` with a `post-receive` hook that checks the code out into `/home/<domain>` and fixes ownership/SELinux context. The script prints the exact `git remote add` command to run on your PC. Requires your PC's SSH key to already be authorized on the VPS (SSH is key-only, see below).
 
+For a site that **already exists** on the server (created before this option existed, or you skipped it), run `add_git_deploy.sh` instead — it sets up the same bare repo + hook for an existing `/home/<domain>` without recreating the vhost. The first push overwrites repo-tracked files in place; untracked files already on the server (`.env`, `wp-config.php`, `uploads/`, `vendor/`, …) are left alone.
+
 If instead you push to GitHub and want the VPS to pull automatically from there, use a GitHub Actions workflow that SSHes in and runs `git pull` — no extra package needed on the VPS, just a deploy key added to `authorized_keys` and two repo secrets. (Not scripted here since it lives in the app repo, not this one.)
 
 ---
@@ -211,6 +213,7 @@ Run either one on the web VPS after `setup_web.sh`/`vps_setup.sh` has already co
 | `setup_web.sh` | Web VPS | Nginx + PHP-FPM + phpMyAdmin + hardening, no DB |
 | `setup_db.sh` | DB VPS | MariaDB + Redis + hardening, no web server |
 | `add_new_site.sh` | Web VPS | Add a domain's vhost, optional Cloudflare HTTPS, optional git deploy |
+| `add_git_deploy.sh` | Web VPS | Add git push-to-deploy to a site that already exists here |
 | `add_db_client.sh` | DB VPS | Whitelist another web/app VPS against the existing DB + Redis |
 | `harden_pma_tailscale.sh` | Web VPS | Restrict phpMyAdmin to your Tailscale network |
 | `harden_pma_access.sh` | Web VPS | Restrict phpMyAdmin to a DDNS hostname's current IP |
