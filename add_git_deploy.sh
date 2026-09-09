@@ -34,6 +34,12 @@ else
     sudo git symbolic-ref HEAD refs/heads/main
 fi
 
+# Bare repos are pushed to as root over SSH - keep them root-owned, and mark
+# them safe so a drifted owner (an old chmod.sh run, a manual chown) doesn't
+# trip "detected dubious ownership in repository" on the next push.
+sudo chown -R root:root "$GIT_DIR"
+sudo git config --system --add safe.directory "$GIT_DIR"
+
 sudo bash -c "cat > $GIT_DIR/hooks/post-receive" <<HOOK
 #!/bin/bash
 set -e

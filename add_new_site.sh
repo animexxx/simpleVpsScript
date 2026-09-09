@@ -45,8 +45,12 @@ server {
 }
 EOF
 
-sudo chown -R nginx:nginx /home/
-sudo chcon -R -t httpd_sys_rw_content_t /home/
+# Only this site's dir - NOT all of /home/. A recursive chown of /home/ also
+# rewrites /home/git/*.git (the bare repos are pushed to as root over SSH and
+# must stay root-owned), which makes the next push fail with
+# "detected dubious ownership in repository".
+sudo chown -R nginx:nginx "/home/$domain"
+sudo chcon -R -t httpd_sys_rw_content_t "/home/$domain"
 sudo nginx -t
 sudo systemctl restart nginx
 echo "Added $domain"
@@ -210,6 +214,10 @@ if [[ "$ENABLE_GIT" =~ ^[Yy]$ ]]; then
 
     sudo mkdir -p "$GIT_DIR"
     sudo git init --bare -q "$GIT_DIR"
+    sudo chown -R root:root "$GIT_DIR"
+    # Belt-and-braces: even if the repo's ownership drifts later (an old
+    # chmod.sh run, a manual chown), pushes as root still work.
+    sudo git config --system --add safe.directory "$GIT_DIR"
     # Force HEAD to main regardless of this system's git default branch (still
     # "master" on plenty of distros) - otherwise the first push creates
     # refs/heads/main with real commits while HEAD still points at the empty
