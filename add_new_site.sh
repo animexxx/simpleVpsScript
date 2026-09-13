@@ -123,9 +123,20 @@ if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
         # "All zones" (or the specific zone). The old "Origin CA Key" is deprecated
         # (removed 2026-09-30) - this needs a regular API Token now, sent as a Bearer
         # token, not the legacy X-Auth-User-Service-Key header.
+        #
+        # Cached at /root/.cf_api_token (root-only) so it only needs to be typed once
+        # per server, not once per domain/session - env var still wins if set.
+        CF_TOKEN_FILE="/root/.cf_api_token"
+        if [ -z "${CF_ORIGIN_CA_KEY:-}" ] && sudo test -f "$CF_TOKEN_FILE"; then
+            CF_ORIGIN_CA_KEY=$(sudo cat "$CF_TOKEN_FILE")
+        fi
         if [ -z "${CF_ORIGIN_CA_KEY:-}" ]; then
             read -rsp "Enter your Cloudflare API Token (Zone > SSL and Certificates > Edit permission; same token works for every future domain): " CF_ORIGIN_CA_KEY
             echo
+        fi
+        if [ ! -f "$CF_TOKEN_FILE" ] || [ "$(sudo cat "$CF_TOKEN_FILE" 2>/dev/null)" != "$CF_ORIGIN_CA_KEY" ]; then
+            printf '%s' "$CF_ORIGIN_CA_KEY" | sudo tee "$CF_TOKEN_FILE" >/dev/null
+            sudo chmod 600 "$CF_TOKEN_FILE"
         fi
 
         CSR_PATH=$(mktemp)

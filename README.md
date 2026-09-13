@@ -89,7 +89,7 @@ Only relevant if the domain is **proxied through Cloudflare** (orange cloud). No
 **Adding a subdomain of a site already set up here?** The script always requests both `<domain>` and `*.<domain>` when it creates a certificate, so a subdomain (e.g. `blog.example.com` when `example.com` already has HTTPS enabled) is already covered by the parent's existing wildcard cert. It checks for that automatically — if `/etc/nginx/ssl/<parent-domain>/` already has a cert, it reuses it and skips straight to writing the vhost, with no prompts and no new Cloudflare API call.
 
 Otherwise, two ways the script can get one:
-- **Automatic (recommended)**: generates a key + CSR locally and calls the Cloudflare API. Needs a one-time **API Token** from your Cloudflare account: dashboard → *My Profile → API Tokens → Create Token* → custom token with permission **Zone / SSL and Certificates / Edit**, zone resource **All zones** (or a specific zone). The same token is reused for every future domain (export `CF_ORIGIN_CA_KEY` to skip the prompt entirely on future runs). Note: Cloudflare's older "Origin CA Key" is deprecated (removed 2026-09-30) — don't use that, a regular API Token is what this script sends now.
+- **Automatic (recommended)**: generates a key + CSR locally and calls the Cloudflare API. Needs a one-time **API Token** from your Cloudflare account: dashboard → *My Profile → API Tokens → Create Token* → custom token with permission **Zone / SSL and Certificates / Edit**, zone resource **All zones** (or a specific zone). The same token is reused for every future domain — the first time you enter it, the script caches it to `/root/.cf_api_token` (mode 600) and reads it back on every later run, so you only type it once per server. `export CF_ORIGIN_CA_KEY` still works too and takes priority over the cached file (useful for a one-off different token). Note: Cloudflare's older "Origin CA Key" is deprecated (removed 2026-09-30) — don't use that, a regular API Token is what this script sends now.
 - **Manual fallback**: if you skip the API or it fails, the script asks for the paths to a cert/key you already created via *SSL/TLS → Origin Server → Create Certificate* in the dashboard and saved to the server yourself.
 
 Either way, set Cloudflare's SSL/TLS mode to **Full (strict)** in the dashboard (not Flexible — Flexible leaves the Cloudflare↔VPS leg unencrypted and can cause WordPress redirect loops; if you use it anyway, skip this HTTPS prompt entirely since Cloudflare never talks to the origin over 443 in that mode).
@@ -174,6 +174,7 @@ Should show one distinct prefix per site with a nonzero count each. A prefix you
 |---|---|
 | MariaDB root password (for scripts/cron, no prompt needed) | `/root/.my.cnf` on the DB server |
 | Redis password | `/root/.redis_password` on the DB server |
+| Cloudflare API Token (for Origin Certificates) | `/root/.cf_api_token` on the web server, cached after first entry |
 | Nightly DB backups | `/root/db_backups` on the DB server, one `.sql.gz` per database, 7 days |
 
 ---
