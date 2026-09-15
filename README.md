@@ -192,6 +192,14 @@ Run either one on the web VPS after `setup_web.sh`/`vps_setup.sh` has already co
 
 ---
 
+## Blocking scan-bots that hit the VPS IP directly (`harden_http_cloudflare.sh`)
+
+If every site on the box is proxied through Cloudflare (orange cloud), scan-bots that skip Cloudflare and hit the VPS's public IP directly still reach Nginx/PHP-FPM on 80/443 - they just don't get Cloudflare's WAF/rate-limiting in front of them, and enough of them can burn real CPU on port scans and vuln probes. `harden_http_cloudflare.sh` closes that gap: it creates firewalld ipsets from Cloudflare's published IPv4/IPv6 ranges (`https://www.cloudflare.com/ips-v4` / `ips-v6`), replaces the zone-wide `--add-service=http/https` rules from `vps_setup.sh`/`setup_web.sh` with rich rules scoped to those ipsets, and installs a daily cron job (`/usr/local/sbin/sync_cloudflare_ips.sh`) that re-fetches the ranges and only reloads firewalld if something changed.
+
+⚠️ Only run this if **every** site on the box is proxied through Cloudflare. A grey-cloud (DNS-only) site, or a domain not on Cloudflare at all, becomes unreachable over 80/443 afterwards. Port 2222 (SSH) and 9119 (phpMyAdmin) are untouched. Run it on the web VPS (or the single all-in-one VPS) after http/https are already open.
+
+---
+
 ## SSH hardening (all setup scripts)
 
 `vps_setup.sh`, `setup_web.sh`, and `setup_db.sh` all harden SSH the same way: move it to port 2222, `PermitRootLogin prohibit-password` (key-only), `PasswordAuthentication no`.
@@ -218,4 +226,5 @@ Run either one on the web VPS after `setup_web.sh`/`vps_setup.sh` has already co
 | `add_db_client.sh` | DB VPS | Whitelist another web/app VPS against the existing DB + Redis |
 | `harden_pma_tailscale.sh` | Web VPS | Restrict phpMyAdmin to your Tailscale network |
 | `harden_pma_access.sh` | Web VPS | Restrict phpMyAdmin to a DDNS hostname's current IP |
+| `harden_http_cloudflare.sh` | Web VPS (or single VPS) | Restrict ports 80/443 to Cloudflare's IP ranges only |
 | `chmod.sh` | Any | Reset `/home` ownership/SELinux context |
