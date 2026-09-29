@@ -242,6 +242,21 @@ if [[ "$ENABLE_GIT" =~ ^[Yy]$ ]]; then
 #!/bin/bash
 set -e
 git --work-tree=$WORK_TREE --git-dir=$GIT_DIR checkout -f main
+cd $WORK_TREE
+# Laravel: vendor/ is gitignored on purpose (never commit it), so it must be
+# rebuilt here on every deploy - skipped for plain PHP/WordPress sites, which
+# have no composer.json. Built frontend assets (public/build) are expected to
+# be committed already - no npm/node on this server.
+if [ -f composer.json ]; then
+    composer install --no-dev --optimize-autoloader
+fi
+if [ -f artisan ]; then
+    php artisan migrate --force
+    php artisan config:cache
+    php artisan route:cache
+    php artisan view:cache
+    php artisan queue:restart
+fi
 chown -R nginx:nginx $WORK_TREE
 chcon -R -t httpd_sys_rw_content_t $WORK_TREE 2>/dev/null || true
 echo "Deployed \$(date) -> $WORK_TREE"
