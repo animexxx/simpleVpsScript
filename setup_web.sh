@@ -50,7 +50,7 @@ sudo systemctl start crond
 
 sudo dnf install https://rpms.remirepo.net/enterprise/remi-release-9.rpm -y
 sudo dnf config-manager --set-enabled remi -y
-sudo dnf module enable php:remi-8.2 -y
+sudo dnf module enable php:remi-8.3 -y
 
 # Install Git
 sudo dnf install git -y
