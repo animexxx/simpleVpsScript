@@ -20,6 +20,8 @@ Both paths use `add_new_site.sh` afterwards to add each domain.
 
 Installs Nginx, PHP-FPM, MariaDB, Redis, phpMyAdmin, Composer, Supervisor, Git, SSH hardening and Fail2Ban all on one box.
 
+> **Nginx source:** both `vps_setup.sh` and `setup_web.sh` install Nginx from the official **nginx.org stable repo** (`/etc/yum.repos.d/nginx.repo`, AppStream's `nginx` module is disabled) instead of the old AppStream build, so new boxes get a current release (≥ 1.30.7, which fixes the NGINX2Root flaws, CVE-2026-123007 and friends). To bring an *existing* box up to date, run: `dnf module disable nginx -y`, add the same repo file, then `dnf upgrade nginx -y && nginx -t && systemctl restart nginx`.
+
 ```bash
 chmod +x vps_setup.sh
 sudo ./vps_setup.sh

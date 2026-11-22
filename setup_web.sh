@@ -55,8 +55,21 @@ sudo dnf module enable php:remi-8.2 -y
 # Install Git
 sudo dnf install git -y
 
-# Install Nginx
+# Install Nginx from the official nginx.org stable repo (AppStream's nginx is old and
+# lacks the NGINX2Root fixes, CVE-2026-123007 etc. -> need >= 1.30.7 stable)
+sudo tee /etc/yum.repos.d/nginx.repo >/dev/null <<'NGINX_REPO'
+[nginx-stable]
+name=nginx stable repo
+baseurl=https://nginx.org/packages/rhel/9/$basearch/
+gpgcheck=1
+enabled=1
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+NGINX_REPO
+sudo dnf module disable nginx -y || true
 sudo dnf install nginx -y
+sudo dnf upgrade nginx -y
+echo "Installed nginx: $(nginx -v 2>&1)"
 
 # Enable and start Nginx
 sudo systemctl enable nginx
