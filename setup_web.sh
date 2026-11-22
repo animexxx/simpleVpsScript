@@ -216,7 +216,7 @@ worker_rlimit_nofile 260000;
 
 error_log  /var/log/nginx/error.log;
 pid        /run/nginx.pid;
-include /usr/share/nginx/modules/*.conf;
+include /etc/nginx/modules/*.conf;
 
 events {
         worker_connections  2048;
